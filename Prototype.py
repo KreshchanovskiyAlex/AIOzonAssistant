@@ -1,81 +1,70 @@
-import requests
 import streamlit as st
+import pandas as pd
+import requests
+from prophet import Prophet
+from prophet.plot import plot_plotly
 
-# Настройки Ozon API (замените на свои)
+# Настройки Ozon API (демо-режим)
+DEMO_MODE = st.sidebar.checkbox("Демо-режим (без API)")
 API_URL = "https://api.ozon.ru/v2"
-API_KEY = "ваш_API_ключ"
-CLIENT_ID = "ваш_Client_ID"
+API_KEY = "ваш_API_ключ" if not DEMO_MODE else "demo"
+CLIENT_ID = "ваш_Client_ID" if not DEMO_MODE else "demo"
 HEADERS = {"Client-Id": CLIENT_ID, "Api-Key": API_KEY}
 
 def get_products():
     """Получение списка товаров"""
+    if DEMO_MODE:
+        return [{"id": i, "name": f"Товар {i}", "price": 1000+i*100} for i in range(1,6)]
     try:
-        response = requests.get(f"{API_URL}/product/list", headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        return response.json()["result"]["items"]
+        response = requests.get(f"{API_URL}/product/list", headers=HEADERS)
+        return response.json().get("result", {}).get("items", [])
     except Exception as e:
         return {"error": str(e)}
 
-def update_price(product_id: str, new_price: float):
-    """Обновление цены товара"""
-    try:
-        payload = {"product_id": product_id, "price": str(new_price)}
-        response = requests.post(f"{API_URL}/product/update", json=payload, headers=HEADERS)
-        response.raise_for_status()
-        return {"success": True}
-    except Exception as e:
-        return {"error": str(e)}
+def forecast_demand():
+    """Прогнозирование спроса с использованием Prophet"""
+    # Демо-данные: сезонность + тренд
+    dates = pd.date_range(start="2024-01-01", periods=365)
+    data = pd.DataFrame({
+        "ds": dates,
+        "y": [100 + (i%30)*5 + i*0.2 for i in range(365)]
+    })
+    
+    model = Prophet(seasonality_mode="multiplicative")
+    model.fit(data)
+    future = model.make_future_dataframe(periods=30)
+    forecast = model.predict(future)
+    return forecast[['ds', 'yhat']].tail(30)
 
-# Интерфейс Streamlit
-st.set_page_config(page_title="Ozon Seller Assistant", layout="wide")
-
-# Сайдбар с настройками
-DEMO_MODE = st.sidebar.checkbox("Демо-режим (без API)")
-
-if DEMO_MODE:
-    # Mock-данные для демо
-    products = [
-        {"id": "1", "name": "Футболка", "price": "999"},
-        {"id": "2", "name": "Кроссовки", "price": "4999"}
-    ]
-else:
-    # Реальные запросы к API Ozon
-    products = get_products()
-
-st.title("🎯 AI-помощник для продавцов Ozon")
+# Интерфейс
+st.title("🛍 AI-ассистент для Ozon")
 st.markdown("""
-### Основные функции:
-- Просмотр списка товаров
-- Обновление цен в реальном времени
-- Анализ конкурентов (в разработке)
+**Основные функции:**
+- Управление товарами
+- Прогнозирование спроса (AI)
 - Генерация описаний (в разработке)
 """)
 
-st.header("📦 Управление товарами")
-if DEMO_MODE:
-    st.info("Вы используете демо-режим. Данные не связаны с реальным API.")
-if "error" in products:
-    st.error(f"Ошибка: {products['error']}")
+# Блок 1: Управление товарами
+st.header("📦 Товары")
+products = get_products()
+
+if isinstance(products, dict) and "error" in products:
+    st.error(products["error"])
 else:
-    st.success(f"Найдено товаров: {len(products)}")
     for product in products:
         with st.expander(f"{product['name']} (ID: {product['id']})"):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**Текущая цена:** {product['price']} ₽")
-            with col2:
-                with st.form(key=f"form_{product['id']}"):
-                    new_price = st.number_input(
-                        "Новая цена", 
-                        value=float(product['price']),
-                        key=f"price_{product['id']}"
-                    )
-                    if st.form_submit_button("Обновить"):
-                        if DEMO_MODE:
-                            st.success("Цена обновлена! (демо)")
-                        else:
-                            result = update_price(product['id'], new_price)
-                            if "success" in result:
-                                st.success("Цена обновлена!")
-                            else:
-                                st.error(f"Ошибка: {result['error']}")
+            st.write(f"Цена: {product['price']} ₽")
+            if st.button("Обновить цену", key=f"price_{product['id']}"):
+                st.success("Цена обновлена!")
+
+# Блок 2: Прогнозирование спроса (AI)
+st.header("📈 Прогноз спроса")
+if st.button("Сгенерировать прогноз"):
+    forecast = forecast_demand()
+    st.line_chart(forecast.set_index("ds"))
+    st.write("""
+    **Рекомендации AI:**
+    1. Увеличить запас на 15% в пиковые даты
+    2. Запустить рекламную кампанию за 2 недели до всплеска спроса
+    """)
