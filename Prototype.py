@@ -14,7 +14,8 @@ HEADERS = {"Client-Id": CLIENT_ID, "Api-Key": API_KEY}
 def get_products():
     """Получение списка товаров"""
     if DEMO_MODE:
-        return [{"id": i, "name": f"Товар {i}", "price": 1000+i*100} for i in range(1,6)]
+        # Демо-данные для товаров
+        return [{"id": i, "name": f"Товар {i}", "price": 1000 + i * 100} for i in range(1, 6)]
     try:
         response = requests.get(f"{API_URL}/product/list", headers=HEADERS)
         return response.json().get("result", {}).get("items", [])
@@ -27,14 +28,14 @@ def forecast_demand():
     dates = pd.date_range(start="2024-01-01", periods=365)
     data = pd.DataFrame({
         "ds": dates,
-        "y": [100 + (i%30)*5 + i*0.2 for i in range(365)]
+        "y": [100 + (i % 30) * 5 + i * 0.2 for i in range(365)]
     })
     
     model = Prophet(seasonality_mode="multiplicative")
     model.fit(data)
     future = model.make_future_dataframe(periods=30)
     forecast = model.predict(future)
-    return forecast[['ds', 'yhat']].tail(30)
+    return forecast[['ds', 'yhat']].tail(30), model, forecast
 
 # Интерфейс
 st.title("🛍 AI-ассистент для Ozon")
@@ -61,10 +62,24 @@ else:
 # Блок 2: Прогнозирование спроса (AI)
 st.header("📈 Прогноз спроса")
 if st.button("Сгенерировать прогноз"):
-    forecast = forecast_demand()
-    st.line_chart(forecast.set_index("ds"))
-    st.write("""
-    **Рекомендации AI:**
-    1. Увеличить запас на 15% в пиковые даты
-    2. Запустить рекламную кампанию за 2 недели до всплеска спроса
-    """)
+    forecast, model, full_forecast = forecast_demand()
+    
+    # График прогноза
+    st.subheader("Прогноз спроса на 30 дней")
+    fig = plot_plotly(model, full_forecast)
+    st.plotly_chart(fig)
+
+    # Рекомендации на основе прогноза
+    last_date = forecast["ds"].max()
+    predicted_demand = forecast[forecast["ds"] == last_date]["yhat"].values[0]
+
+    st.subheader("Рекомендации AI:")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Прогнозируемый спрос", f"{predicted_demand:.0f} ед.")
+    with col2:
+        st.write("""
+        **Советы:**
+        - Увеличьте запас на 15% в пиковые даты.
+        - Запустите рекламную кампанию за 2 недели до всплеска спроса.
+        """)
