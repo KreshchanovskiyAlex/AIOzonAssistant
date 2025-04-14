@@ -14,17 +14,16 @@ HEADERS = {"Client-Id": CLIENT_ID, "Api-Key": API_KEY}
 def get_products():
     """Получение списка товаров"""
     if DEMO_MODE:
-        # Демо-данные для товаров
         return [{"id": i, "name": f"Товар {i}", "price": 1000 + i * 100} for i in range(1, 6)]
     try:
         response = requests.get(f"{API_URL}/product/list", headers=HEADERS)
+        response.encoding = 'utf-8'  # Указываем явно кодировку ответа
         return response.json().get("result", {}).get("items", [])
     except Exception as e:
         return {"error": str(e)}
 
 def forecast_demand():
     """Прогнозирование спроса с использованием Prophet"""
-    # Демо-данные: сезонность + тренд
     dates = pd.date_range(start="2024-01-01", periods=365)
     data = pd.DataFrame({
         "ds": dates,
@@ -43,7 +42,6 @@ st.markdown("""
 **Основные функции:**
 - Управление товарами
 - Прогнозирование спроса (AI)
-- Генерация описаний (в разработке)
 """)
 
 # Блок 1: Управление товарами
