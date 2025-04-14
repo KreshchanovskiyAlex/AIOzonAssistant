@@ -30,12 +30,18 @@ def update_price(product_id: str, new_price: float):
 st.set_page_config(page_title="Ozon Seller Assistant", layout="wide")
 
 # Сайдбар с настройками
-with st.sidebar:
-    st.header("Настройки API")
-    api_key = st.text_input("API Key", value=API_KEY)
-    client_id = st.text_input("Client ID", value=CLIENT_ID)
+DEMO_MODE = st.sidebar.checkbox("Демо-режим (без API)")
 
-# Основной интерфейс
+if DEMO_MODE:
+    # Mock-данные для демо
+    products = [
+        {"id": "1", "name": "Футболка", "price": "999"},
+        {"id": "2", "name": "Кроссовки", "price": "4999"}
+    ]
+else:
+    # Реальные запросы к API Ozon
+    products = get_products()
+
 st.title("🎯 AI-помощник для продавцов Ozon")
 st.markdown("""
 ### Основные функции:
@@ -45,29 +51,29 @@ st.markdown("""
 - Генерация описаний (в разработке)
 """)
 
-# Раздел управления товарами
 st.header("📦 Управление товарами")
-if st.button("Обновить список товаров"):
-    with st.spinner("Получаем данные..."):
-        products = get_products()
-        
-    if "error" in products:
-        st.error(f"Ошибка: {products['error']}")
-    else:
-        st.success(f"Найдено товаров: {len(products)}")
-        for product in products[:15]:
-            with st.expander(f"{product['name']} (ID: {product['id']})"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown(f"**Текущая цена:** {product['price']} ₽")
-                with col2:
-                    with st.form(key=f"form_{product['id']}"):
-                        new_price = st.number_input(
-                            "Новая цена", 
-                            value=float(product['price']),
-                            key=f"price_{product['id']}"
-                        )
-                        if st.form_submit_button("Обновить"):
+if DEMO_MODE:
+    st.info("Вы используете демо-режим. Данные не связаны с реальным API.")
+if "error" in products:
+    st.error(f"Ошибка: {products['error']}")
+else:
+    st.success(f"Найдено товаров: {len(products)}")
+    for product in products:
+        with st.expander(f"{product['name']} (ID: {product['id']})"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Текущая цена:** {product['price']} ₽")
+            with col2:
+                with st.form(key=f"form_{product['id']}"):
+                    new_price = st.number_input(
+                        "Новая цена", 
+                        value=float(product['price']),
+                        key=f"price_{product['id']}"
+                    )
+                    if st.form_submit_button("Обновить"):
+                        if DEMO_MODE:
+                            st.success("Цена обновлена! (демо)")
+                        else:
                             result = update_price(product['id'], new_price)
                             if "success" in result:
                                 st.success("Цена обновлена!")
